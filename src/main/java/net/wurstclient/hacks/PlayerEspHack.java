@@ -7,10 +7,13 @@
  */
 package net.wurstclient.hacks;
 
+import java.awt.*;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import net.wurstclient.settings.CheckboxSetting;
+import net.wurstclient.settings.ColorSetting;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
@@ -35,8 +38,7 @@ import net.wurstclient.events.RenderListener;
 import net.wurstclient.events.UpdateListener;
 import net.wurstclient.hack.Hack;
 import net.wurstclient.settings.EspBoxSizeSetting;
-import net.wurstclient.settings.EspStyleSetting;
-import net.wurstclient.settings.EspStyleSetting.EspStyle;
+import net.wurstclient.settings.EspBoxStyleSetting;
 import net.wurstclient.settings.filterlists.EntityFilterList;
 import net.wurstclient.settings.filters.FilterInvisibleSetting;
 import net.wurstclient.settings.filters.FilterSleepingSetting;
@@ -50,12 +52,34 @@ import net.wurstclient.util.RotationUtils;
 public final class PlayerEspHack extends Hack implements UpdateListener,
 	CameraTransformViewBobbingListener, RenderListener
 {
-	private final EspStyleSetting style =
-		new EspStyleSetting(EspStyle.LINES_AND_BOXES);
+	private final EspBoxStyleSetting boxStyle = new EspBoxStyleSetting();
 	
 	private final EspBoxSizeSetting boxSize = new EspBoxSizeSetting(
 		"\u00a7lAccurate\u00a7r mode shows the exact hitbox of each player.\n"
 			+ "\u00a7lFancy\u00a7r mode shows slightly larger boxes that look better.");
+	
+	private final CheckboxSetting lines = new CheckboxSetting("Draw lines",
+		"Draw tracer lines pointing from center of screen to player entity with corresponding direction to it.",
+		false);
+	
+	private final CheckboxSetting dynamicBoxColor = new CheckboxSetting(
+		"Dynamic boxes colors",
+		"Boxes colors will change depending on distance to another player from red to green.",
+		true);
+	
+	private final ColorSetting staticBoxColor = new ColorSetting("Boxes colors",
+		"If \"Dynamic boxes colors\" is disabled, colors will be set to this static color.",
+		Color.WHITE);
+	
+	private final CheckboxSetting dynamicLineColor = new CheckboxSetting(
+		"Dynamic lines colors",
+		"Lines colors will change depending on distance to another player from red to green.",
+		true);
+	
+	private final ColorSetting staticLineColor = new ColorSetting(
+		"Lines colors",
+		"If \"Dynamic lines colors\" is disabled, colors will be set to this static color.",
+		Color.WHITE);
 	
 	private final EntityFilterList entityFilters = new EntityFilterList(
 		new FilterSleepingSetting("Won't show sleeping players.", false),
@@ -68,8 +92,14 @@ public final class PlayerEspHack extends Hack implements UpdateListener,
 		super("PlayerESP");
 		setCategory(Category.RENDER);
 		
-		addSetting(style);
+		addSetting(boxStyle);
 		addSetting(boxSize);
+		addSetting(lines);
+		addSetting(dynamicBoxColor);
+		addSetting(staticBoxColor);
+		addSetting(dynamicLineColor);
+		addSetting(staticLineColor);
+		
 		entityFilters.forEach(this::addSetting);
 	}
 	
@@ -111,7 +141,7 @@ public final class PlayerEspHack extends Hack implements UpdateListener,
 	public void onCameraTransformViewBobbing(
 		CameraTransformViewBobbingEvent event)
 	{
-		if(style.hasLines())
+		if(lines.isChecked())
 			event.cancel();
 	}
 	
@@ -129,10 +159,10 @@ public final class PlayerEspHack extends Hack implements UpdateListener,
 		RenderUtils.applyRegionalRenderOffset(matrixStack, region);
 		
 		// draw boxes
-		if(style.hasBoxes())
+		if(boxStyle.isEnabled())
 			renderBoxes(matrixStack, partialTicks, region);
 		
-		if(style.hasLines())
+		if(lines.isChecked())
 			renderTracers(matrixStack, partialTicks, region);
 		
 		matrixStack.pop();
@@ -164,12 +194,29 @@ public final class PlayerEspHack extends Hack implements UpdateListener,
 				RenderSystem.setShaderColor(0, 0, 1, 0.5F);
 			else
 			{
-				float f = MC.player.distanceTo(e) / 20F;
-				RenderSystem.setShaderColor(2 - f, f, 0, 0.5F);
+				if(dynamicBoxColor.isChecked())
+				{
+					float f = MC.player.distanceTo(e) / 20F;
+					RenderSystem.setShaderColor(2 - f, f, 0, 0.5F);
+				}else
+				{
+					float[] c = staticBoxColor.getColorF();
+					RenderSystem.setShaderColor(c[0], c[1], c[2], 0.5F);
+				}
 			}
 			
 			Box bb = new Box(-0.5, 0, -0.5, 0.5, 1, 0.5);
-			RenderUtils.drawOutlinedBox(bb, matrixStack);
+			
+			switch(boxStyle.getSelected())
+			{
+				case FILLED -> RenderUtils.drawSolidBox(bb, matrixStack);
+				case OUTLINED -> RenderUtils.drawOutlinedBox(bb, matrixStack);
+				case FILLED_AND_OUTLINED ->
+				{
+					RenderUtils.drawSolidBox(bb, matrixStack);
+					RenderUtils.drawOutlinedBox(bb, matrixStack);
+				}
+			}
 			
 			matrixStack.pop();
 		}
@@ -207,10 +254,19 @@ public final class PlayerEspHack extends Hack implements UpdateListener,
 				
 			}else
 			{
-				float f = MC.player.distanceTo(e) / 20F;
-				r = MathHelper.clamp(2 - f, 0, 1);
-				g = MathHelper.clamp(f, 0, 1);
-				b = 0;
+				if(dynamicLineColor.isChecked())
+				{
+					float f = MC.player.distanceTo(e) / 20F;
+					r = MathHelper.clamp(2 - f, 0, 1);
+					g = MathHelper.clamp(f, 0, 1);
+					b = 0;
+				}else
+				{
+					float[] c = staticLineColor.getColorF();
+					r = c[0];
+					g = c[1];
+					b = c[2];
+				}
 			}
 			
 			bufferBuilder

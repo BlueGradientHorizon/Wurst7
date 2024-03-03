@@ -7,18 +7,19 @@
  */
 package net.wurstclient.hacks;
 
+import java.awt.*;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import net.wurstclient.settings.CheckboxSetting;
+import net.wurstclient.settings.ColorSetting;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 
-import net.minecraft.client.gl.ShaderProgram;
-import net.minecraft.client.gl.VertexBuffer;
 import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.render.Tessellator;
@@ -37,7 +38,7 @@ import net.wurstclient.events.RenderListener;
 import net.wurstclient.events.UpdateListener;
 import net.wurstclient.hack.Hack;
 import net.wurstclient.settings.EspBoxSizeSetting;
-import net.wurstclient.settings.EspStyleSetting;
+import net.wurstclient.settings.EspBoxStyleSetting;
 import net.wurstclient.settings.filterlists.EntityFilterList;
 import net.wurstclient.settings.filters.*;
 import net.wurstclient.util.EntityUtils;
@@ -49,11 +50,34 @@ import net.wurstclient.util.RotationUtils;
 public final class MobEspHack extends Hack implements UpdateListener,
 	CameraTransformViewBobbingListener, RenderListener
 {
-	private final EspStyleSetting style = new EspStyleSetting();
+	private final EspBoxStyleSetting boxStyle = new EspBoxStyleSetting();
 	
 	private final EspBoxSizeSetting boxSize = new EspBoxSizeSetting(
 		"\u00a7lAccurate\u00a7r mode shows the exact hitbox of each mob.\n"
 			+ "\u00a7lFancy\u00a7r mode shows slightly larger boxes that look better.");
+	
+	private final CheckboxSetting lines = new CheckboxSetting("Draw lines",
+		"Draw tracer lines pointing from center of screen to mob entity with corresponding direction to it.",
+		false);
+	
+	private final CheckboxSetting dynamicBoxColor = new CheckboxSetting(
+		"Dynamic boxes colors",
+		"Boxes colors will change depending on distance to mob from red to green.",
+		true);
+	
+	private final ColorSetting staticBoxColor = new ColorSetting("Boxes colors",
+		"If \"Dynamic boxes colors\" is disabled, colors will be set to this static color.",
+		Color.WHITE);
+	
+	private final CheckboxSetting dynamicLineColor = new CheckboxSetting(
+		"Dynamic lines colors",
+		"Lines colors will change depending on distance to mob from red to green.",
+		true);
+	
+	private final ColorSetting staticLineColor = new ColorSetting(
+		"Lines colors",
+		"If \"Dynamic lines colors\" is disabled, colors will be set to this static color.",
+		Color.WHITE);
 	
 	private final EntityFilterList entityFilters =
 		new EntityFilterList(FilterHostileSetting.genericVision(false),
@@ -80,14 +104,18 @@ public final class MobEspHack extends Hack implements UpdateListener,
 			FilterArmorStandsSetting.genericVision(true));
 	
 	private final ArrayList<LivingEntity> mobs = new ArrayList<>();
-	private VertexBuffer mobBox;
 	
 	public MobEspHack()
 	{
 		super("MobESP");
 		setCategory(Category.RENDER);
-		addSetting(style);
+		addSetting(boxStyle);
 		addSetting(boxSize);
+		addSetting(lines);
+		addSetting(dynamicBoxColor);
+		addSetting(staticBoxColor);
+		addSetting(dynamicLineColor);
+		addSetting(staticLineColor);
 		entityFilters.forEach(this::addSetting);
 	}
 	
@@ -97,10 +125,6 @@ public final class MobEspHack extends Hack implements UpdateListener,
 		EVENTS.add(UpdateListener.class, this);
 		EVENTS.add(CameraTransformViewBobbingListener.class, this);
 		EVENTS.add(RenderListener.class, this);
-		
-		mobBox = new VertexBuffer(VertexBuffer.Usage.STATIC);
-		Box bb = new Box(-0.5, 0, -0.5, 0.5, 1, 0.5);
-		RenderUtils.drawOutlinedBox(bb, mobBox);
 	}
 	
 	@Override
@@ -109,9 +133,6 @@ public final class MobEspHack extends Hack implements UpdateListener,
 		EVENTS.remove(UpdateListener.class, this);
 		EVENTS.remove(CameraTransformViewBobbingListener.class, this);
 		EVENTS.remove(RenderListener.class, this);
-		
-		if(mobBox != null)
-			mobBox.close();
 	}
 	
 	@Override
@@ -134,7 +155,7 @@ public final class MobEspHack extends Hack implements UpdateListener,
 	public void onCameraTransformViewBobbing(
 		CameraTransformViewBobbingEvent event)
 	{
-		if(style.hasLines())
+		if(lines.isChecked())
 			event.cancel();
 	}
 	
@@ -151,10 +172,10 @@ public final class MobEspHack extends Hack implements UpdateListener,
 		RegionPos region = RenderUtils.getCameraRegion();
 		RenderUtils.applyRegionalRenderOffset(matrixStack, region);
 		
-		if(style.hasBoxes())
+		if(boxStyle.isEnabled())
 			renderBoxes(matrixStack, partialTicks, region);
 		
-		if(style.hasLines())
+		if(lines.isChecked())
 			renderTracers(matrixStack, partialTicks, region);
 		
 		matrixStack.pop();
@@ -182,15 +203,28 @@ public final class MobEspHack extends Hack implements UpdateListener,
 			matrixStack.scale(e.getWidth() + extraSize,
 				e.getHeight() + extraSize, e.getWidth() + extraSize);
 			
-			float f = MC.player.distanceTo(e) / 20F;
-			RenderSystem.setShaderColor(2 - f, f, 0, 0.5F);
+			if(dynamicBoxColor.isChecked())
+			{
+				float f = MC.player.distanceTo(e) / 20F;
+				RenderSystem.setShaderColor(2 - f, f, 0, 0.5F);
+			}else
+			{
+				float[] c = staticBoxColor.getColorF();
+				RenderSystem.setShaderColor(c[0], c[1], c[2], 0.5F);
+			}
 			
-			Matrix4f viewMatrix = matrixStack.peek().getPositionMatrix();
-			Matrix4f projMatrix = RenderSystem.getProjectionMatrix();
-			ShaderProgram shader = RenderSystem.getShader();
-			mobBox.bind();
-			mobBox.draw(viewMatrix, projMatrix, shader);
-			VertexBuffer.unbind();
+			Box bb = new Box(-0.5, 0, -0.5, 0.5, 1, 0.5);
+			
+			switch(boxStyle.getSelected())
+			{
+				case FILLED -> RenderUtils.drawSolidBox(bb, matrixStack);
+				case OUTLINED -> RenderUtils.drawOutlinedBox(bb, matrixStack);
+				case FILLED_AND_OUTLINED ->
+				{
+					RenderUtils.drawSolidBox(bb, matrixStack);
+					RenderUtils.drawOutlinedBox(bb, matrixStack);
+				}
+			}
 			
 			matrixStack.pop();
 		}
@@ -218,17 +252,29 @@ public final class MobEspHack extends Hack implements UpdateListener,
 			Vec3d end = EntityUtils.getLerpedBox(e, partialTicks).getCenter()
 				.subtract(regionVec);
 			
-			float f = MC.player.distanceTo(e) / 20F;
-			float r = MathHelper.clamp(2 - f, 0, 1);
-			float g = MathHelper.clamp(f, 0, 1);
+			float r, g, b;
+			
+			if(dynamicLineColor.isChecked())
+			{
+				float f = MC.player.distanceTo(e) / 20F;
+				r = MathHelper.clamp(2 - f, 0, 1);
+				g = MathHelper.clamp(f, 0, 1);
+				b = 0;
+			}else
+			{
+				float[] c = staticLineColor.getColorF();
+				r = c[0];
+				g = c[1];
+				b = c[2];
+			}
 			
 			bufferBuilder
 				.vertex(matrix, (float)start.x, (float)start.y, (float)start.z)
-				.color(r, g, 0, 0.5F).next();
+				.color(r, g, b, 0.5F).next();
 			
 			bufferBuilder
 				.vertex(matrix, (float)end.x, (float)end.y, (float)end.z)
-				.color(r, g, 0, 0.5F).next();
+				.color(r, g, b, 0.5F).next();
 		}
 		
 		tessellator.draw();

@@ -10,6 +10,7 @@ package net.wurstclient.hacks.chestesp;
 import java.util.Objects;
 import java.util.stream.Stream;
 
+import net.wurstclient.settings.EspBoxStyleSetting;
 import org.joml.Matrix4f;
 
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -36,10 +37,13 @@ public final class ChestEspRenderer
 	private final MatrixStack matrixStack;
 	private final RegionPos region;
 	private final Vec3d start;
+	private final EspBoxStyleSetting boxStyle;
 	
-	public ChestEspRenderer(MatrixStack matrixStack, float partialTicks)
+	public ChestEspRenderer(MatrixStack matrixStack, float partialTicks,
+		EspBoxStyleSetting boxStyle)
 	{
 		this.matrixStack = matrixStack;
+		this.boxStyle = boxStyle;
 		region = RenderUtils.getCameraRegion();
 		start = RotationUtils.getClientLookVec(partialTicks)
 			.add(RenderUtils.getCameraPos()).subtract(region.toVec3d());
@@ -63,15 +67,39 @@ public final class ChestEspRenderer
 			Matrix4f projMatrix = RenderSystem.getProjectionMatrix();
 			ShaderProgram shader = RenderSystem.getShader();
 			
-			RenderSystem.setShaderColor(colorF[0], colorF[1], colorF[2], 0.25F);
-			solidBox.bind();
-			solidBox.draw(viewMatrix, projMatrix, shader);
-			VertexBuffer.unbind();
-			
-			RenderSystem.setShaderColor(colorF[0], colorF[1], colorF[2], 0.5F);
-			outlinedBox.bind();
-			outlinedBox.draw(viewMatrix, projMatrix, shader);
-			VertexBuffer.unbind();
+			switch(boxStyle.getSelected())
+			{
+				case FILLED ->
+				{
+					RenderSystem.setShaderColor(colorF[0], colorF[1], colorF[2],
+						0.25F);
+					solidBox.bind();
+					solidBox.draw(viewMatrix, projMatrix, shader);
+					VertexBuffer.unbind();
+				}
+				case OUTLINED ->
+				{
+					RenderSystem.setShaderColor(colorF[0], colorF[1], colorF[2],
+						0.5F);
+					outlinedBox.bind();
+					outlinedBox.draw(viewMatrix, projMatrix, shader);
+					VertexBuffer.unbind();
+				}
+				case FILLED_AND_OUTLINED ->
+				{
+					RenderSystem.setShaderColor(colorF[0], colorF[1], colorF[2],
+						0.25F);
+					solidBox.bind();
+					solidBox.draw(viewMatrix, projMatrix, shader);
+					VertexBuffer.unbind();
+					
+					RenderSystem.setShaderColor(colorF[0], colorF[1], colorF[2],
+						0.5F);
+					outlinedBox.bind();
+					outlinedBox.draw(viewMatrix, projMatrix, shader);
+					VertexBuffer.unbind();
+				}
+			}
 			
 			matrixStack.pop();
 		}

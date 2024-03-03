@@ -10,6 +10,7 @@ package net.wurstclient.hacks;
 import java.awt.Color;
 import java.util.ArrayList;
 
+import net.wurstclient.settings.CheckboxSetting;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
@@ -33,7 +34,7 @@ import net.wurstclient.events.UpdateListener;
 import net.wurstclient.hack.Hack;
 import net.wurstclient.settings.ColorSetting;
 import net.wurstclient.settings.EspBoxSizeSetting;
-import net.wurstclient.settings.EspStyleSetting;
+import net.wurstclient.settings.EspBoxStyleSetting;
 import net.wurstclient.util.EntityUtils;
 import net.wurstclient.util.RegionPos;
 import net.wurstclient.util.RenderUtils;
@@ -43,11 +44,15 @@ import net.wurstclient.util.RotationUtils;
 public final class ItemEspHack extends Hack implements UpdateListener,
 	CameraTransformViewBobbingListener, RenderListener
 {
-	private final EspStyleSetting style = new EspStyleSetting();
+	private final EspBoxStyleSetting boxStyle = new EspBoxStyleSetting();
 	
 	private final EspBoxSizeSetting boxSize = new EspBoxSizeSetting(
 		"\u00a7lAccurate\u00a7r mode shows the exact hitbox of each item.\n"
 			+ "\u00a7lFancy\u00a7r mode shows larger boxes that look better.");
+	
+	private final CheckboxSetting lines = new CheckboxSetting("Draw lines",
+		"Draw tracer lines pointing from center of screen to item entity with corresponding direction to it.",
+		false);
 	
 	private final ColorSetting color = new ColorSetting("Color",
 		"Items will be highlighted in this color.", Color.YELLOW);
@@ -59,8 +64,9 @@ public final class ItemEspHack extends Hack implements UpdateListener,
 		super("ItemESP");
 		setCategory(Category.RENDER);
 		
-		addSetting(style);
+		addSetting(boxStyle);
 		addSetting(boxSize);
+		addSetting(lines);
 		addSetting(color);
 	}
 	
@@ -93,7 +99,7 @@ public final class ItemEspHack extends Hack implements UpdateListener,
 	public void onCameraTransformViewBobbing(
 		CameraTransformViewBobbingEvent event)
 	{
-		if(style.hasLines())
+		if(lines.isChecked())
 			event.cancel();
 	}
 	
@@ -108,9 +114,10 @@ public final class ItemEspHack extends Hack implements UpdateListener,
 		RegionPos region = RenderUtils.getCameraRegion();
 		RenderUtils.applyRegionalRenderOffset(matrixStack, region);
 		
-		renderBoxes(matrixStack, partialTicks, region);
+		if(boxStyle.isEnabled())
+			renderBoxes(matrixStack, partialTicks, region);
 		
-		if(style.hasLines())
+		if(lines.isChecked())
 			renderTracers(matrixStack, partialTicks, region);
 		
 		matrixStack.pop();
@@ -134,21 +141,25 @@ public final class ItemEspHack extends Hack implements UpdateListener,
 				.subtract(region.toVec3d());
 			matrixStack.translate(lerpedPos.x, lerpedPos.y, lerpedPos.z);
 			
-			if(style.hasBoxes())
+			matrixStack.scale(e.getWidth() + extraSize,
+				e.getHeight() + extraSize, e.getWidth() + extraSize);
+			
+			GL11.glEnable(GL11.GL_BLEND);
+			GL11.glDisable(GL11.GL_DEPTH_TEST);
+			float[] colorF = color.getColorF();
+			RenderSystem.setShaderColor(colorF[0], colorF[1], colorF[2], 0.5F);
+			
+			Box bb = new Box(-0.5, 0, -0.5, 0.5, 1, 0.5);
+			
+			switch(boxStyle.getSelected())
 			{
-				matrixStack.push();
-				matrixStack.scale(e.getWidth() + extraSize,
-					e.getHeight() + extraSize, e.getWidth() + extraSize);
-				
-				GL11.glEnable(GL11.GL_BLEND);
-				GL11.glDisable(GL11.GL_DEPTH_TEST);
-				float[] colorF = color.getColorF();
-				RenderSystem.setShaderColor(colorF[0], colorF[1], colorF[2],
-					0.5F);
-				RenderUtils.drawOutlinedBox(new Box(-0.5, 0, -0.5, 0.5, 1, 0.5),
-					matrixStack);
-				
-				matrixStack.pop();
+				case FILLED -> RenderUtils.drawSolidBox(bb, matrixStack);
+				case OUTLINED -> RenderUtils.drawOutlinedBox(bb, matrixStack);
+				case FILLED_AND_OUTLINED ->
+				{
+					RenderUtils.drawSolidBox(bb, matrixStack);
+					RenderUtils.drawOutlinedBox(bb, matrixStack);
+				}
 			}
 			
 			matrixStack.pop();
