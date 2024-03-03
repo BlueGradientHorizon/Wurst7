@@ -35,14 +35,18 @@ import net.wurstclient.hacks.chestesp.ChestEspGroup;
 import net.wurstclient.hacks.chestesp.ChestEspRenderer;
 import net.wurstclient.settings.CheckboxSetting;
 import net.wurstclient.settings.ColorSetting;
-import net.wurstclient.settings.EspStyleSetting;
+import net.wurstclient.settings.EspBoxStyleSetting;
 import net.wurstclient.util.ChunkUtils;
 import net.wurstclient.util.RenderUtils;
 
 public class ChestEspHack extends Hack implements UpdateListener,
 	CameraTransformViewBobbingListener, RenderListener
 {
-	private final EspStyleSetting style = new EspStyleSetting();
+	private final EspBoxStyleSetting boxStyle = new EspBoxStyleSetting();
+	
+	private final CheckboxSetting lines = new CheckboxSetting("Draw lines",
+		"Draw tracer lines pointing from center of screen to chest entity with corresponding direction to it.",
+		false);
 	
 	private final ChestEspBlockGroup basicChests = new ChestEspBlockGroup(
 		new ColorSetting("Chest color",
@@ -135,7 +139,8 @@ public class ChestEspHack extends Hack implements UpdateListener,
 		super("ChestESP");
 		setCategory(Category.RENDER);
 		
-		addSetting(style);
+		addSetting(boxStyle);
+		addSetting(lines);
 		groups.stream().flatMap(ChestEspGroup::getSettings)
 			.forEach(this::addSetting);
 	}
@@ -207,7 +212,7 @@ public class ChestEspHack extends Hack implements UpdateListener,
 	public void onCameraTransformViewBobbing(
 		CameraTransformViewBobbingEvent event)
 	{
-		if(style.hasLines())
+		if(lines.isChecked())
 			event.cancel();
 	}
 	
@@ -227,16 +232,16 @@ public class ChestEspHack extends Hack implements UpdateListener,
 			.forEach(g -> g.updateBoxes(partialTicks));
 		
 		ChestEspRenderer espRenderer =
-			new ChestEspRenderer(matrixStack, partialTicks);
+			new ChestEspRenderer(matrixStack, partialTicks, boxStyle);
 		
-		if(style.hasBoxes())
+		if(boxStyle.isEnabled())
 		{
 			RenderSystem.setShader(GameRenderer::getPositionProgram);
 			groups.stream().filter(ChestEspGroup::isEnabled)
 				.forEach(espRenderer::renderBoxes);
 		}
 		
-		if(style.hasLines())
+		if(lines.isChecked())
 		{
 			RenderSystem.setShader(GameRenderer::getPositionProgram);
 			groups.stream().filter(ChestEspGroup::isEnabled)

@@ -32,7 +32,7 @@ import net.wurstclient.hacks.portalesp.PortalEspRenderer;
 import net.wurstclient.settings.CheckboxSetting;
 import net.wurstclient.settings.ChunkAreaSetting;
 import net.wurstclient.settings.ColorSetting;
-import net.wurstclient.settings.EspStyleSetting;
+import net.wurstclient.settings.EspBoxStyleSetting;
 import net.wurstclient.util.ChunkSearcher.Result;
 import net.wurstclient.util.ChunkSearcherCoordinator;
 import net.wurstclient.util.RenderUtils;
@@ -40,7 +40,11 @@ import net.wurstclient.util.RenderUtils;
 public final class PortalEspHack extends Hack implements UpdateListener,
 	CameraTransformViewBobbingListener, RenderListener
 {
-	private final EspStyleSetting style = new EspStyleSetting();
+	private final EspBoxStyleSetting boxStyle = new EspBoxStyleSetting();
+	
+	private final CheckboxSetting lines = new CheckboxSetting("Draw lines",
+		"Draw tracer lines pointing from center of screen to portal blocks with corresponding direction to it.",
+		false);
 	
 	private final PortalEspBlockGroup netherPortal =
 		new PortalEspBlockGroup(Blocks.NETHER_PORTAL,
@@ -89,7 +93,8 @@ public final class PortalEspHack extends Hack implements UpdateListener,
 		super("PortalESP");
 		setCategory(Category.RENDER);
 		
-		addSetting(style);
+		addSetting(boxStyle);
+		addSetting(lines);
 		groups.stream().flatMap(PortalEspBlockGroup::getSettings)
 			.forEach(this::addSetting);
 		addSetting(area);
@@ -125,7 +130,7 @@ public final class PortalEspHack extends Hack implements UpdateListener,
 	public void onCameraTransformViewBobbing(
 		CameraTransformViewBobbingEvent event)
 	{
-		if(style.getSelected().hasLines())
+		if(lines.isChecked())
 			event.cancel();
 	}
 	
@@ -153,16 +158,16 @@ public final class PortalEspHack extends Hack implements UpdateListener,
 		RenderUtils.applyRegionalRenderOffset(matrixStack);
 		
 		PortalEspRenderer espRenderer =
-			new PortalEspRenderer(matrixStack, partialTicks);
+			new PortalEspRenderer(matrixStack, partialTicks, boxStyle);
 		
-		if(style.getSelected().hasBoxes())
+		if(boxStyle.isEnabled())
 		{
 			RenderSystem.setShader(GameRenderer::getPositionProgram);
 			groups.stream().filter(PortalEspBlockGroup::isEnabled)
 				.forEach(espRenderer::renderBoxes);
 		}
 		
-		if(style.getSelected().hasLines())
+		if(lines.isChecked())
 		{
 			RenderSystem.setShader(GameRenderer::getPositionProgram);
 			groups.stream().filter(PortalEspBlockGroup::isEnabled)
