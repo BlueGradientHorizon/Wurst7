@@ -13,7 +13,7 @@ public final class EspBoxStyleSetting
 	public EspBoxStyleSetting()
 	{
 		super("Box style", "How object's box will be visually looking.",
-			EspBoxStyle.values(), EspBoxStyle.OUTLINED);
+			EspBoxStyle.values(), EspBoxStyle.EDGES);
 	}
 	
 	public EspBoxStyleSetting(EspBoxStyle selected)
@@ -37,8 +37,8 @@ public final class EspBoxStyleSetting
 	{
 		DISABLED("Disabled", false),
 		FILLED("Filled", true),
-		OUTLINED("Outlined", true),
-		FILLED_AND_OUTLINED("Filled and outlined", true);
+		EDGES("Edges", true),
+		FILLED_WITH_EDGES("Filled with edges", true);
 		
 		private final String name;
 		private final boolean isEnabled;

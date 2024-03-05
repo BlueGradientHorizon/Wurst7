@@ -10,6 +10,9 @@ package net.wurstclient.mixin;
 import java.io.File;
 import java.util.UUID;
 
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -159,6 +162,18 @@ public abstract class MinecraftClientMixin
 	{
 		cir.setReturnValue(
 			!WurstClient.INSTANCE.getOtfs().noTelemetryOtf.isEnabled());
+	}
+	
+	@Inject(method = "hasOutline", at = @At("HEAD"), cancellable = true)
+	private void outlineEntities(Entity entity,
+		CallbackInfoReturnable<Boolean> cir)
+	{
+		if(entity instanceof PlayerEntity pe
+			&& WurstClient.INSTANCE.getHax().playerEspHack.shouldGlow(pe))
+			cir.setReturnValue(true);
+		else if(entity instanceof LivingEntity le
+			&& WurstClient.INSTANCE.getHax().mobEspHack.shouldGlow(le))
+			cir.setReturnValue(true);
 	}
 	
 	@Override

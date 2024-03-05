@@ -13,9 +13,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import net.wurstclient.settings.CheckboxSetting;
-import net.wurstclient.settings.ColorSetting;
+import net.wurstclient.settings.*;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import org.lwjgl.opengl.GL11;
 
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -37,8 +37,6 @@ import net.wurstclient.events.CameraTransformViewBobbingListener;
 import net.wurstclient.events.RenderListener;
 import net.wurstclient.events.UpdateListener;
 import net.wurstclient.hack.Hack;
-import net.wurstclient.settings.EspBoxSizeSetting;
-import net.wurstclient.settings.EspBoxStyleSetting;
 import net.wurstclient.settings.filterlists.EntityFilterList;
 import net.wurstclient.settings.filters.*;
 import net.wurstclient.util.EntityUtils;
@@ -55,6 +53,9 @@ public final class MobEspHack extends Hack implements UpdateListener,
 	private final EspBoxSizeSetting boxSize = new EspBoxSizeSetting(
 		"\u00a7lAccurate\u00a7r mode shows the exact hitbox of each mob.\n"
 			+ "\u00a7lFancy\u00a7r mode shows slightly larger boxes that look better.");
+	
+	private final CheckboxSetting boxRotation = new CheckboxSetting(
+		"Box rotation", "Rotate ESP box according to entity's body yaw.", true);
 	
 	private final CheckboxSetting lines = new CheckboxSetting("Draw lines",
 		"Draw tracer lines pointing from center of screen to mob entity with corresponding direction to it.",
@@ -78,6 +79,24 @@ public final class MobEspHack extends Hack implements UpdateListener,
 		"Lines colors",
 		"If \"Dynamic lines colors\" is disabled, colors will be set to this static color.",
 		Color.WHITE);
+	
+	private final SliderSetting glowingEffectRadius = new SliderSetting(
+		"Glowing effect radius",
+		"Enables Minecraft's glowing effect for all visible mobs if distance for each of them in blocks is less than this value.",
+		0, 0, 64, 1, SliderSetting.ValueDisplay.INTEGER);
+	
+	private final CheckboxSetting disableEspIfGlowing = new CheckboxSetting(
+		"Disable ESP for mobs within glowing radius.",
+		"Disables ESP boxes for all mobs if \"Glowing effect radius\" setting behaviour is currently applied for them.",
+		false);
+	
+	public boolean shouldGlow(LivingEntity le)
+	{
+		if(glowingEffectRadius.getValue() == 0)
+			return false;
+		return MC.player != null && MC.player.getPos()
+			.distanceTo(le.getPos()) < glowingEffectRadius.getValue();
+	}
 	
 	private final EntityFilterList entityFilters =
 		new EntityFilterList(FilterHostileSetting.genericVision(false),
@@ -109,13 +128,18 @@ public final class MobEspHack extends Hack implements UpdateListener,
 	{
 		super("MobESP");
 		setCategory(Category.RENDER);
+		
 		addSetting(boxStyle);
 		addSetting(boxSize);
+		addSetting(boxRotation);
 		addSetting(lines);
 		addSetting(dynamicBoxColor);
 		addSetting(staticBoxColor);
 		addSetting(dynamicLineColor);
 		addSetting(staticLineColor);
+		addSetting(glowingEffectRadius);
+		addSetting(disableEspIfGlowing);
+		
 		entityFilters.forEach(this::addSetting);
 	}
 	
@@ -192,20 +216,27 @@ public final class MobEspHack extends Hack implements UpdateListener,
 		float extraSize = boxSize.getExtraSize();
 		RenderSystem.setShader(GameRenderer::getPositionProgram);
 		
-		for(LivingEntity e : mobs)
+		for(LivingEntity le : mobs)
 		{
+			if(disableEspIfGlowing.isChecked() && shouldGlow(le))
+				continue;
+			
 			matrixStack.push();
 			
-			Vec3d lerpedPos = EntityUtils.getLerpedPos(e, partialTicks)
+			Vec3d lerpedPos = EntityUtils.getLerpedPos(le, partialTicks)
 				.subtract(region.toVec3d());
 			matrixStack.translate(lerpedPos.x, lerpedPos.y, lerpedPos.z);
 			
-			matrixStack.scale(e.getWidth() + extraSize,
-				e.getHeight() + extraSize, e.getWidth() + extraSize);
+			matrixStack.scale(le.getWidth() + extraSize,
+				le.getHeight() + extraSize, le.getWidth() + extraSize);
+			
+			if(boxRotation.isChecked())
+				matrixStack.multiply(new Quaternionf()
+					.rotationY(-le.bodyYaw * MathHelper.RADIANS_PER_DEGREE));
 			
 			if(dynamicBoxColor.isChecked())
 			{
-				float f = MC.player.distanceTo(e) / 20F;
+				float f = MC.player.distanceTo(le) / 20F;
 				RenderSystem.setShaderColor(2 - f, f, 0, 0.5F);
 			}else
 			{
@@ -218,8 +249,8 @@ public final class MobEspHack extends Hack implements UpdateListener,
 			switch(boxStyle.getSelected())
 			{
 				case FILLED -> RenderUtils.drawSolidBox(bb, matrixStack);
-				case OUTLINED -> RenderUtils.drawOutlinedBox(bb, matrixStack);
-				case FILLED_AND_OUTLINED ->
+				case EDGES -> RenderUtils.drawOutlinedBox(bb, matrixStack);
+				case FILLED_WITH_EDGES ->
 				{
 					RenderUtils.drawSolidBox(bb, matrixStack);
 					RenderUtils.drawOutlinedBox(bb, matrixStack);
@@ -247,16 +278,16 @@ public final class MobEspHack extends Hack implements UpdateListener,
 		Vec3d start = RotationUtils.getClientLookVec(partialTicks)
 			.add(RenderUtils.getCameraPos()).subtract(regionVec);
 		
-		for(LivingEntity e : mobs)
+		for(LivingEntity le : mobs)
 		{
-			Vec3d end = EntityUtils.getLerpedBox(e, partialTicks).getCenter()
+			Vec3d end = EntityUtils.getLerpedBox(le, partialTicks).getCenter()
 				.subtract(regionVec);
 			
 			float r, g, b;
 			
 			if(dynamicLineColor.isChecked())
 			{
-				float f = MC.player.distanceTo(e) / 20F;
+				float f = MC.player.distanceTo(le) / 20F;
 				r = MathHelper.clamp(2 - f, 0, 1);
 				g = MathHelper.clamp(f, 0, 1);
 				b = 0;
@@ -279,4 +310,7 @@ public final class MobEspHack extends Hack implements UpdateListener,
 		
 		tessellator.draw();
 	}
+	
+	// See MinecraftClientMixin.outlineEntities(),
+	// WorldRendererMixin.renderEntity()
 }
