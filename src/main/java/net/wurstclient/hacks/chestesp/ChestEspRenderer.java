@@ -77,7 +77,7 @@ public final class ChestEspRenderer
 					solidBox.draw(viewMatrix, projMatrix, shader);
 					VertexBuffer.unbind();
 				}
-				case OUTLINED ->
+				case EDGES ->
 				{
 					RenderSystem.setShaderColor(colorF[0], colorF[1], colorF[2],
 						0.5F);
@@ -85,7 +85,7 @@ public final class ChestEspRenderer
 					outlinedBox.draw(viewMatrix, projMatrix, shader);
 					VertexBuffer.unbind();
 				}
-				case FILLED_AND_OUTLINED ->
+				case FILLED_WITH_EDGES ->
 				{
 					RenderSystem.setShaderColor(colorF[0], colorF[1], colorF[2],
 						0.25F);

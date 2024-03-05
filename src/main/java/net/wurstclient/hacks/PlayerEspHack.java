@@ -12,9 +12,9 @@ import java.util.ArrayList;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import net.wurstclient.settings.CheckboxSetting;
-import net.wurstclient.settings.ColorSetting;
+import net.wurstclient.settings.*;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import org.lwjgl.opengl.GL11;
 
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -37,8 +37,6 @@ import net.wurstclient.events.CameraTransformViewBobbingListener;
 import net.wurstclient.events.RenderListener;
 import net.wurstclient.events.UpdateListener;
 import net.wurstclient.hack.Hack;
-import net.wurstclient.settings.EspBoxSizeSetting;
-import net.wurstclient.settings.EspBoxStyleSetting;
 import net.wurstclient.settings.filterlists.EntityFilterList;
 import net.wurstclient.settings.filters.FilterInvisibleSetting;
 import net.wurstclient.settings.filters.FilterSleepingSetting;
@@ -57,6 +55,9 @@ public final class PlayerEspHack extends Hack implements UpdateListener,
 	private final EspBoxSizeSetting boxSize = new EspBoxSizeSetting(
 		"\u00a7lAccurate\u00a7r mode shows the exact hitbox of each player.\n"
 			+ "\u00a7lFancy\u00a7r mode shows slightly larger boxes that look better.");
+	
+	private final CheckboxSetting boxRotation = new CheckboxSetting(
+		"Box rotation", "Rotate ESP box according to entity's body yaw.", true);
 	
 	private final CheckboxSetting lines = new CheckboxSetting("Draw lines",
 		"Draw tracer lines pointing from center of screen to player entity with corresponding direction to it.",
@@ -81,6 +82,24 @@ public final class PlayerEspHack extends Hack implements UpdateListener,
 		"If \"Dynamic lines colors\" is disabled, colors will be set to this static color.",
 		Color.WHITE);
 	
+	private final SliderSetting glowingEffectRadius = new SliderSetting(
+		"Glowing effect radius",
+		"Enables Minecraft's glowing effect for all visible players if distance for each of them in blocks is less than this value.",
+		0, 0, 64, 1, SliderSetting.ValueDisplay.INTEGER);
+	
+	private final CheckboxSetting disableEspIfGlowing = new CheckboxSetting(
+		"Disable ESP for players within glowing radius.",
+		"Disables ESP boxes for all players if \"Glowing effect radius\" setting behaviour is currently applied for them.",
+		false);
+	
+	public boolean shouldGlow(PlayerEntity pe)
+	{
+		if(glowingEffectRadius.getValue() == 0)
+			return false;
+		return MC.player != null && MC.player.getPos()
+			.distanceTo(pe.getPos()) < glowingEffectRadius.getValue();
+	}
+	
 	private final EntityFilterList entityFilters = new EntityFilterList(
 		new FilterSleepingSetting("Won't show sleeping players.", false),
 		new FilterInvisibleSetting("Won't show invisible players.", false));
@@ -94,11 +113,14 @@ public final class PlayerEspHack extends Hack implements UpdateListener,
 		
 		addSetting(boxStyle);
 		addSetting(boxSize);
+		addSetting(boxRotation);
 		addSetting(lines);
 		addSetting(dynamicBoxColor);
 		addSetting(staticBoxColor);
 		addSetting(dynamicLineColor);
 		addSetting(staticLineColor);
+		addSetting(glowingEffectRadius);
+		addSetting(disableEspIfGlowing);
 		
 		entityFilters.forEach(this::addSetting);
 	}
@@ -178,25 +200,32 @@ public final class PlayerEspHack extends Hack implements UpdateListener,
 	{
 		float extraSize = boxSize.getExtraSize();
 		
-		for(PlayerEntity e : players)
+		for(PlayerEntity pe : players)
 		{
+			if(disableEspIfGlowing.isChecked() && shouldGlow(pe))
+				continue;
+			
 			matrixStack.push();
 			
-			Vec3d lerpedPos = EntityUtils.getLerpedPos(e, partialTicks)
+			Vec3d lerpedPos = EntityUtils.getLerpedPos(pe, partialTicks)
 				.subtract(region.toVec3d());
 			matrixStack.translate(lerpedPos.x, lerpedPos.y, lerpedPos.z);
 			
-			matrixStack.scale(e.getWidth() + extraSize,
-				e.getHeight() + extraSize, e.getWidth() + extraSize);
+			matrixStack.scale(pe.getWidth() + extraSize,
+				pe.getHeight() + extraSize, pe.getWidth() + extraSize);
+			
+			if(boxRotation.isChecked())
+				matrixStack.multiply(new Quaternionf()
+					.rotationY(-pe.bodyYaw * MathHelper.RADIANS_PER_DEGREE));
 			
 			// set color
-			if(WURST.getFriends().contains(e.getName().getString()))
+			if(WURST.getFriends().contains(pe.getName().getString()))
 				RenderSystem.setShaderColor(0, 0, 1, 0.5F);
 			else
 			{
 				if(dynamicBoxColor.isChecked())
 				{
-					float f = MC.player.distanceTo(e) / 20F;
+					float f = MC.player.distanceTo(pe) / 20F;
 					RenderSystem.setShaderColor(2 - f, f, 0, 0.5F);
 				}else
 				{
@@ -210,8 +239,8 @@ public final class PlayerEspHack extends Hack implements UpdateListener,
 			switch(boxStyle.getSelected())
 			{
 				case FILLED -> RenderUtils.drawSolidBox(bb, matrixStack);
-				case OUTLINED -> RenderUtils.drawOutlinedBox(bb, matrixStack);
-				case FILLED_AND_OUTLINED ->
+				case EDGES -> RenderUtils.drawOutlinedBox(bb, matrixStack);
+				case FILLED_WITH_EDGES ->
 				{
 					RenderUtils.drawSolidBox(bb, matrixStack);
 					RenderUtils.drawOutlinedBox(bb, matrixStack);
@@ -239,14 +268,14 @@ public final class PlayerEspHack extends Hack implements UpdateListener,
 		Vec3d start = RotationUtils.getClientLookVec(partialTicks)
 			.add(RenderUtils.getCameraPos()).subtract(regionVec);
 		
-		for(PlayerEntity e : players)
+		for(PlayerEntity pe : players)
 		{
-			Vec3d end = EntityUtils.getLerpedBox(e, partialTicks).getCenter()
+			Vec3d end = EntityUtils.getLerpedBox(pe, partialTicks).getCenter()
 				.subtract(regionVec);
 			
 			float r, g, b;
 			
-			if(WURST.getFriends().contains(e.getName().getString()))
+			if(WURST.getFriends().contains(pe.getName().getString()))
 			{
 				r = 0;
 				g = 0;
@@ -256,7 +285,7 @@ public final class PlayerEspHack extends Hack implements UpdateListener,
 			{
 				if(dynamicLineColor.isChecked())
 				{
-					float f = MC.player.distanceTo(e) / 20F;
+					float f = MC.player.distanceTo(pe) / 20F;
 					r = MathHelper.clamp(2 - f, 0, 1);
 					g = MathHelper.clamp(f, 0, 1);
 					b = 0;
@@ -280,4 +309,7 @@ public final class PlayerEspHack extends Hack implements UpdateListener,
 		
 		tessellator.draw();
 	}
+	
+	// See MinecraftClientMixin.outlineEntities(),
+	// WorldRendererMixin.renderEntity()
 }

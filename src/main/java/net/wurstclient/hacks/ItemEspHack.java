@@ -154,8 +154,8 @@ public final class ItemEspHack extends Hack implements UpdateListener,
 			switch(boxStyle.getSelected())
 			{
 				case FILLED -> RenderUtils.drawSolidBox(bb, matrixStack);
-				case OUTLINED -> RenderUtils.drawOutlinedBox(bb, matrixStack);
-				case FILLED_AND_OUTLINED ->
+				case EDGES -> RenderUtils.drawOutlinedBox(bb, matrixStack);
+				case FILLED_WITH_EDGES ->
 				{
 					RenderUtils.drawSolidBox(bb, matrixStack);
 					RenderUtils.drawOutlinedBox(bb, matrixStack);
