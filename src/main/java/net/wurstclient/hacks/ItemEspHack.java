@@ -9,8 +9,11 @@ package net.wurstclient.hacks;
 
 import java.awt.Color;
 import java.util.ArrayList;
+import java.util.List;
 
-import net.wurstclient.settings.CheckboxSetting;
+import net.minecraft.item.Item;
+import net.minecraft.registry.Registries;
+import net.wurstclient.settings.*;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL11;
 
@@ -32,9 +35,6 @@ import net.wurstclient.events.CameraTransformViewBobbingListener;
 import net.wurstclient.events.RenderListener;
 import net.wurstclient.events.UpdateListener;
 import net.wurstclient.hack.Hack;
-import net.wurstclient.settings.ColorSetting;
-import net.wurstclient.settings.EspBoxSizeSetting;
-import net.wurstclient.settings.EspBoxStyleSetting;
 import net.wurstclient.util.EntityUtils;
 import net.wurstclient.util.RegionPos;
 import net.wurstclient.util.RenderUtils;
@@ -54,6 +54,10 @@ public final class ItemEspHack extends Hack implements UpdateListener,
 		"Draw tracer lines pointing from center of screen to item entity with corresponding direction to it.",
 		false);
 	
+	private final ItemListSetting itemsListFilter = new ItemListSetting(
+		"Items filter",
+		"ESP box will be rendered only for item entities containing items from this item list. No items means select all item entities.");
+	
 	private final ColorSetting color = new ColorSetting("Color",
 		"Items will be highlighted in this color.", Color.YELLOW);
 	
@@ -67,6 +71,7 @@ public final class ItemEspHack extends Hack implements UpdateListener,
 		addSetting(boxStyle);
 		addSetting(boxSize);
 		addSetting(lines);
+		addSetting(itemsListFilter);
 		addSetting(color);
 	}
 	
@@ -128,6 +133,19 @@ public final class ItemEspHack extends Hack implements UpdateListener,
 		GL11.glDisable(GL11.GL_BLEND);
 	}
 	
+	private boolean shouldBeFiltered(ItemEntity e)
+	{
+		List<String> itemsListNames = itemsListFilter.getItemNames();
+		if(!itemsListNames.isEmpty())
+		{
+			Item item = e.getStack().getItem();
+			String itemName = Registries.ITEM.getId(item).toString();
+			
+			return !itemsListNames.contains(itemName);
+		}
+		return false;
+	}
+	
 	private void renderBoxes(MatrixStack matrixStack, float partialTicks,
 		RegionPos region)
 	{
@@ -135,6 +153,9 @@ public final class ItemEspHack extends Hack implements UpdateListener,
 		
 		for(ItemEntity e : items)
 		{
+			if(shouldBeFiltered(e))
+				continue;
+			
 			matrixStack.push();
 			
 			Vec3d lerpedPos = EntityUtils.getLerpedPos(e, partialTicks)
@@ -187,6 +208,9 @@ public final class ItemEspHack extends Hack implements UpdateListener,
 			VertexFormats.POSITION);
 		for(ItemEntity e : items)
 		{
+			if(shouldBeFiltered(e))
+				continue;
+			
 			Vec3d end = EntityUtils.getLerpedBox(e, partialTicks).getCenter()
 				.subtract(regionVec);
 			
