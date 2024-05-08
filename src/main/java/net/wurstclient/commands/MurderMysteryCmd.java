@@ -18,9 +18,9 @@ public class MurderMysteryCmd extends Command
 	public MurderMysteryCmd()
 	{
 		super("mm",
-			"Manages current MurderMystery session statistics and information about detected murderers and detectives.",
-			"", "Statistics: .mm [stat]",
-			"Clear list(-s): .mm clear [all|m|d]");
+			"Manages current MurderMystery session information about detected murderers and detectives.",
+			"", "Statistics: .mm [stat]", "Clear both lists: .mm c|clear",
+			"Clear murderers or detectives list: .mm c|clear m|d");
 	}
 	
 	@Override
@@ -37,17 +37,9 @@ public class MurderMysteryCmd extends Command
 		
 		switch(args[0].toLowerCase())
 		{
-			case "":
-			case "stat":
-			stat();
-			break;
-			
-			case "clear":
-			clear(args);
-			break;
-			
-			default:
-			throw new CmdSyntaxError();
+			case "", "stat" -> stat();
+			case "c", "clear" -> clear(args);
+			default -> throw new CmdSyntaxError();
 		}
 	}
 	
@@ -64,32 +56,24 @@ public class MurderMysteryCmd extends Command
 		
 		if(args.length < 2)
 		{
-			mm.clearMurderers();
-			mm.clearDetectives();
-			ChatUtils.message("Murderers and detectives lists are cleared");
+			mm.clearLists(true, true);
+			ChatUtils.message("Murderers and detectives lists were cleared.");
 			return;
 		}
 		
 		switch(args[1])
 		{
-			case "all":
-			mm.clearMurderers();
-			mm.clearDetectives();
-			ChatUtils.message("Murderers and detectives lists are cleared");
-			break;
-			
-			case "m":
-			mm.clearMurderers();
-			ChatUtils.message("Murderers list is cleared");
-			break;
-			
-			case "d":
-			mm.clearDetectives();
-			ChatUtils.message("Detectives list is cleared");
-			break;
-			
-			default:
-			throw new CmdSyntaxError();
+			case "m" ->
+			{
+				mm.clearLists(true, false);
+				ChatUtils.message("Murderers list was cleared.");
+			}
+			case "d" ->
+			{
+				mm.clearLists(false, true);
+				ChatUtils.message("Detectives list was cleared.");
+			}
+			default -> throw new CmdSyntaxError();
 		}
 	}
 }
