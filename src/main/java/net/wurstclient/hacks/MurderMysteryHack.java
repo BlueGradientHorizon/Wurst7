@@ -80,25 +80,22 @@ public final class MurderMysteryHack extends Hack
 		"Report detectives",
 		"Reports players with detective items (detectives) in the chat.", true);
 	
-	private final CheckboxSetting autoClearMurderersList = new CheckboxSetting(
-		"Automatically clear murderers list",
-		"Automatically clears list of players with murderer items (murderers) on DISCONNECT or JOIN client event.",
-		true);
+	private final CheckboxSetting autoClearListsOnJoinOrDisconnect =
+		new CheckboxSetting(
+			"Automatically clear m. and d. lists (Method 1)",
+			"Automatically clears lists with murderers and detectives when DISCONNECT or JOIN client play connection event is invoked.",
+			true);
 	
-	private final CheckboxSetting autoClearDetectivesList = new CheckboxSetting(
-		"Automatically clear detectives list",
-		"Automatically clears list of players with detective items (detectives) on DISCONNECT or JOIN client event.",
-		true);
+	private final CheckboxSetting autoClearListsOnPlayerRespawnPacket =
+		new CheckboxSetting(
+			"Automatically clear m. and d. lists (Method 2)",
+			"Automatically clears lists with murderers and detectives when PlayerRespawnS2CPacket is received.",
+			true);
 	
 	private final CopyOnWriteArrayList<PlayerEntity> players =
 		new CopyOnWriteArrayList<>();
 	
 	private final ArrayList<PlayerEntity> murderers = new ArrayList<>();
-	
-	public void clearMurderers()
-	{
-		murderers.clear();
-	}
 	
 	public String getMurderersCommaSeparatedEnumerationString()
 	{
@@ -109,11 +106,6 @@ public final class MurderMysteryHack extends Hack
 	
 	private final ArrayList<PlayerEntity> detectives = new ArrayList<>();
 	
-	public void clearDetectives()
-	{
-		detectives.clear();
-	}
-	
 	public String getDetectivesCommaSeparatedEnumerationString()
 	{
 		String s = detectives.stream().map(m -> m.getName().getString())
@@ -121,11 +113,12 @@ public final class MurderMysteryHack extends Hack
 		return "§bDetectives:§r " + (s.isEmpty() ? "§o<Empty>§r" : s);
 	}
 	
-	private void clearLists()
+	public void clearLists(boolean clearMurderersList,
+		boolean clearDetectivesList)
 	{
-		if(autoClearMurderersList.isChecked())
+		if(clearMurderersList)
 			murderers.clear();
-		if(autoClearDetectivesList.isChecked())
+		if(clearDetectivesList)
 			detectives.clear();
 	}
 	
@@ -140,11 +133,17 @@ public final class MurderMysteryHack extends Hack
 		addSetting(showBowIndicators);
 		addSetting(reportMurderers);
 		addSetting(reportDetectives);
-		addSetting(autoClearMurderersList);
-		addSetting(autoClearDetectivesList);
+		addSetting(autoClearListsOnJoinOrDisconnect);
+		addSetting(autoClearListsOnPlayerRespawnPacket);
 		
-		ClientPlayConnectionEvents.DISCONNECT.register((a, b) -> clearLists());
-		ClientPlayConnectionEvents.JOIN.register((a, b, c) -> clearLists());
+		ClientPlayConnectionEvents.DISCONNECT.register((a, b) -> {
+			if(autoClearListsOnJoinOrDisconnect.isChecked())
+				clearLists(true, true);
+		});
+		ClientPlayConnectionEvents.JOIN.register((a, b, c) -> {
+			if(autoClearListsOnJoinOrDisconnect.isChecked())
+				clearLists(true, true);
+		});
 	}
 	
 	@Override
@@ -286,6 +285,10 @@ public final class MurderMysteryHack extends Hack
 		if(MC.world == null)
 			return;
 		
+		if(event.getPacket() instanceof PlayerRespawnS2CPacket)
+			if(autoClearListsOnPlayerRespawnPacket.isChecked())
+				clearLists(true, true);
+			
 		if(!(event.getPacket() instanceof EntityEquipmentUpdateS2CPacket equip))
 			return;
 		
