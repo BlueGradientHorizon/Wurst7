@@ -81,14 +81,12 @@ public final class MurderMysteryHack extends Hack
 		"Reports players with detective items (detectives) in the chat.", true);
 	
 	private final CheckboxSetting autoClearListsOnJoinOrDisconnect =
-		new CheckboxSetting(
-			"Automatically clear m. and d. lists (Method 1)",
+		new CheckboxSetting("Automatically clear m. and d. lists (Method 1)",
 			"Automatically clears lists with murderers and detectives when DISCONNECT or JOIN client play connection event is invoked.",
 			true);
 	
 	private final CheckboxSetting autoClearListsOnPlayerRespawnPacket =
-		new CheckboxSetting(
-			"Automatically clear m. and d. lists (Method 2)",
+		new CheckboxSetting("Automatically clear m. and d. lists (Method 2)",
 			"Automatically clears lists with murderers and detectives when PlayerRespawnS2CPacket is received.",
 			true);
 	
