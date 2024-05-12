@@ -61,6 +61,15 @@ public final class ItemEspHack extends Hack implements UpdateListener,
 	private final ColorSetting color = new ColorSetting("Color",
 		"Items will be highlighted in this color.", Color.YELLOW);
 	
+	private final CheckboxSetting showFilteredOutItems = new CheckboxSetting(
+		"Render ESP boxes for filtered out items",
+		"If enabled, all items which were filtered out earlier by \"Items filter\" will be rendered but with ability to set different color.",
+		false);
+	
+	private final ColorSetting filteredOutItemsColor =
+		new ColorSetting("Color for filtered out items",
+			"Filtered out items will be highlighted in this color.", Color.RED);
+	
 	private final ArrayList<ItemEntity> items = new ArrayList<>();
 	
 	public ItemEspHack()
@@ -73,6 +82,8 @@ public final class ItemEspHack extends Hack implements UpdateListener,
 		addSetting(lines);
 		addSetting(itemsListFilter);
 		addSetting(color);
+		addSetting(showFilteredOutItems);
+		addSetting(filteredOutItemsColor);
 	}
 	
 	@Override
@@ -153,7 +164,9 @@ public final class ItemEspHack extends Hack implements UpdateListener,
 		
 		for(ItemEntity e : items)
 		{
-			if(shouldBeFiltered(e))
+			boolean ifFilterApplies = shouldBeFiltered(e);
+			
+			if(ifFilterApplies && !showFilteredOutItems.isChecked())
 				continue;
 			
 			matrixStack.push();
@@ -167,7 +180,8 @@ public final class ItemEspHack extends Hack implements UpdateListener,
 			
 			GL11.glEnable(GL11.GL_BLEND);
 			GL11.glDisable(GL11.GL_DEPTH_TEST);
-			float[] colorF = color.getColorF();
+			float[] colorF = ifFilterApplies ? filteredOutItemsColor.getColorF()
+				: color.getColorF();
 			RenderSystem.setShaderColor(colorF[0], colorF[1], colorF[2], 0.5F);
 			
 			Box bb = new Box(-0.5, 0, -0.5, 0.5, 1, 0.5);
