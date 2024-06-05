@@ -8,16 +8,13 @@
 package net.wurstclient.hacks;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.datafixers.util.Pair;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.render.*;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.client.world.ClientWorld;
-import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
 import net.minecraft.network.packet.s2c.play.*;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
@@ -87,7 +84,7 @@ public final class MurderMysteryHack extends Hack
 	
 	private final CheckboxSetting autoClearListsOnPlayerRespawnPacket =
 		new CheckboxSetting("Automatically clear m. and d. lists (Method 2)",
-			"Automatically clears lists with murderers and detectives when PlayerRespawnS2CPacket is received.",
+			"Automatically clears lists with murderers and detectives when PlayerRespawnS2CPacket is received. This happens when player is being portal-teleported (on dimension change).",
 			true);
 	
 	private final CopyOnWriteArrayList<PlayerEntity> players =
@@ -174,6 +171,33 @@ public final class MurderMysteryHack extends Hack
 			.filter(e -> Math.abs(e.getY() - MC.player.getY()) <= 1e6);
 		
 		players.addAll(stream.collect(Collectors.toList()));
+		
+		for(PlayerEntity pe : players)
+			checkPlayerHandItems(pe);
+	}
+	
+	private void checkPlayerHandItems(PlayerEntity pe)
+	{
+		Item item = pe.getInventory().getMainHandStack().getItem();
+		String itemName = Registries.ITEM.getId(item).toString();
+		
+		if(murdererItemsList.getItemNames().contains(itemName))
+		{
+			if(murderers.contains(pe))
+				return;
+			murderers.add(pe);
+			if(reportMurderers.isChecked())
+				ChatUtils
+					.message(getMurderersCommaSeparatedEnumerationString());
+		}else if(detectiveItemsList.getItemNames().contains(itemName))
+		{
+			if(detectives.contains(pe))
+				return;
+			detectives.add(pe);
+			if(reportDetectives.isChecked())
+				ChatUtils
+					.message(getDetectivesCommaSeparatedEnumerationString());
+		}
 	}
 	
 	private static void drawTexture(MatrixStack matrixStack, float x, float y,
@@ -280,51 +304,8 @@ public final class MurderMysteryHack extends Hack
 	@Override
 	public void onReceivedPacket(PacketInputEvent event)
 	{
-		if(MC.world == null)
-			return;
-		
 		if(event.getPacket() instanceof PlayerRespawnS2CPacket)
 			if(autoClearListsOnPlayerRespawnPacket.isChecked())
 				clearLists(true, true);
-			
-		if(!(event.getPacket() instanceof EntityEquipmentUpdateS2CPacket equip))
-			return;
-		
-		for(Pair<EquipmentSlot, ItemStack> pair : equip.getEquipmentList())
-		{
-			if(pair.getFirst() != EquipmentSlot.MAINHAND)
-				continue;
-			
-			for(PlayerEntity pe : players)
-			{
-				if(pe.getId() != equip.getId())
-					continue;
-				
-				Item item = pair.getSecond().getItem();
-				String itemName = Registries.ITEM.getId(item).toString();
-				
-				if(murdererItemsList.getItemNames().contains(itemName))
-				{
-					if(murderers.contains(pe))
-						break;
-					murderers.add(pe);
-					if(reportMurderers.isChecked())
-						ChatUtils.message(
-							getMurderersCommaSeparatedEnumerationString());
-					break;
-				}
-				
-				if(detectiveItemsList.getItemNames().contains(itemName))
-				{
-					if(detectives.contains(pe))
-						break;
-					detectives.add(pe);
-					if(reportDetectives.isChecked())
-						ChatUtils.message(
-							getDetectivesCommaSeparatedEnumerationString());
-					break;
-				}
-			}
-		}
 	}
 }
